@@ -212,7 +212,7 @@ get '/*' do
     end
 
     itemtype = "0"
-    itemtype = "1" if selector.length == 1 or !selector[-5..-1].include?(".")
+    itemtype = "1" if selector.length < 2 or !selector[-5..-1].include?(".")
     html += FOOTER_HTML.sub("GOPHERURL", "gopher://#{hostname}/#{itemtype}#{selector}")
     html
  end
