@@ -9,6 +9,8 @@ DEFAULT_SITE='gyr.sen.cx/'
 DOMAIN_WHITELIST=['sen.cx', 'gopher.sen.cx', 'gyr.sen.cx']
 
 VALIDATOR_HTML="<p><a href='http://validator.w3.org/check?uri=referer'><img src='http://www.w3.org/Icons/valid-xhtml11' alt='Valid XHTML 1.1' height='31' width='88' /></a></p>"
+BRIDGE_HTML="<hr /><p><b>You are accessing this gopher page through the World Wide Web using GopherBridge.</b></p><p><b>You can <a href='GOPHERURL'>view the original gopher page here</a>.</b></p>"
+FOOTER_HTML="#{VALIDATOR_HTML}\n#{BRIDGE_HTML}"
 
 class Gopher
   def initialize(host: nil, port: 70)
@@ -67,11 +69,9 @@ def format_writeup(page)
     if(!in_ul_block and /^\s*-\s*(.+)/.match(line)) then
       in_ul_block = true
       html += "</p>\n<ul>\n"
-      puts "starting UL block on: #{line}"
     elsif(in_ul_block and !/^\s*-\s*(.+)/.match(line) and !/^\s{2}\s*(\S.*)/.match(line)) then
       in_ul_block = false
       html += "</ul>\n<p>"
-      puts "ending UL block on: #{line}"
     end
     
     if(/^####/.match(line)) then
@@ -96,7 +96,8 @@ def format_writeup(page)
     end
   end
   
-  html += "</p>#{VALIDATOR_HTML}"
+  html += "</ul>" if in_ul_block
+  html += "</pre>" if in_pre_block
 
   html
 end
@@ -147,7 +148,6 @@ def format_menu(page)
     html += "<li class='menu'><i class='#{css_class}'></i> <a href='#{link_to}'>#{display_string}</a></li>\n"
   end
   html += "</ul>\n"
-  html += VALIDATOR_HTML
 
   html
 end
@@ -199,11 +199,14 @@ get '/*' do
     if(/ctf-writeups/.match(selector) and selector[-3..-1] == "txt") then
       html = format_writeup(page) if /ctf-writeups/.match(selector) and selector[-3..-1] == "txt"
     elsif(selector.include?(".txt"))
-      html = "<pre>#{page}</pre>#{VALIDATOR_HTML}"
+      html = "<pre>#{page}</pre>"
     else
       html = format_menu(page)
     end
-    
+
+    itemtype = "0"
+    itemtype = "1" if selector.length == 1 or !selector[-5..-1].include?(".")
+    html += FOOTER_HTML.sub("GOPHERURL", "gopher://#{hostname}/#{itemtype}#{selector}")
     html
  end
 end
