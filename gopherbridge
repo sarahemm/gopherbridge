@@ -43,7 +43,7 @@ def format_writeup(page)
     next_line = line_array[index+1]
     
     # a few short lines in a row that aren't a title/HR form a preformatted block
-    if(!in_pre_block and line.length.between?(2, 60) and next_line.length.between?(2, 60) and !line.include?("#") and !/^\s{3}/.match(line)) then
+    if(!in_pre_block and line.length.between?(2, 60) and next_line.length.between?(2, 60) and !line.include?("#") and !/^\s{2}/.match(line)) then
       in_pre_block = true
       # there's often a blank line before a preformatted block, strip the
       # extra paragraph that was already added to restore reasonable spacing
@@ -68,7 +68,7 @@ def format_writeup(page)
       in_ul_block = true
       html += "</p>\n<ul>\n"
       puts "starting UL block on: #{line}"
-    elsif(in_ul_block and !/^\s*-\s*(.+)/.match(line) and !/^\s{3}\s*(\S.*)/.match(line)) then
+    elsif(in_ul_block and !/^\s*-\s*(.+)/.match(line) and !/^\s{2}\s*(\S.*)/.match(line)) then
       in_ul_block = false
       html += "</ul>\n<p>"
       puts "ending UL block on: #{line}"
@@ -86,7 +86,7 @@ def format_writeup(page)
     elsif(in_ul_block and matches = /^\s*-\s*(.+)/.match(line)) then
       # in a UL block, add a new list item
       html += "<li>#{matches[1]}</li>\n"
-    elsif(in_ul_block and matches = /^\s{3}\s*(\S.*)/.match(line)) then
+    elsif(in_ul_block and matches = /^\s{2}\s*(\S.*)/.match(line)) then
       # hanging indent in a UL block, add it to the last list item
       # strip the </li>, then add the new content with a new </li>
       html = html[0..-7]
