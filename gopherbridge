@@ -83,6 +83,10 @@ def format_writeup(page)
     elsif(/^\s*$/.match(line)) then
       # blank line, start a new paragraph
       html += "</p>\n<p>"
+    elsif(line[0] == "/") then
+      # continuation of a long URL onto another line
+      html = html[0..-2]
+      html += line
     elsif(in_ul_block and matches = /^\s*-\s*(.+)/.match(line)) then
       # in a UL block, add a new list item
       html += "<li>#{matches[1]}</li>\n"
@@ -98,6 +102,9 @@ def format_writeup(page)
   
   html += "</ul>" if in_ul_block
   html += "</pre>" if in_pre_block
+
+  # turn anything that looks like a link into a link
+  html.gsub!(/(https?:\/\/[^\s)]+)/, "<a href='\\1'>\\1</a>")
 
   html
 end
