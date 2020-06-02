@@ -1,0 +1,209 @@
+#!/usr/bin/ruby
+
+require 'sinatra'
+require 'socket'
+
+set :port, 4570
+
+DEFAULT_SITE='gyr.sen.cx/'
+DOMAIN_WHITELIST=['sen.cx', 'gopher.sen.cx', 'gyr.sen.cx']
+
+VALIDATOR_HTML="<p><a href='http://validator.w3.org/check?uri=referer'><img src='http://www.w3.org/Icons/valid-xhtml11' alt='Valid XHTML 1.1' height='31' width='88' /></a></p>"
+
+class Gopher
+  def initialize(host: nil, port: 70)
+    @host = host
+    @port = port
+  end
+  
+  def request(selector: nil)
+    sock = TCPSocket.new @host, @port
+    sock.puts selector
+    return sock.read
+  end
+end
+
+def format_writeup(page)
+  line_array = page.split("\n")
+
+  ctf_name = line_array.shift
+  chal_name = line_array.shift
+  my_name = line_array.shift
+  html  = "<p>(this gopher page has been auto-formatted to look more web-like, if you prefer you can <a href='?noformat'>view the original here</a>)</p>\n"
+  html += "<ul class='writeup_title'>"
+  html += "<li>#{ctf_name}</li>\n"
+  html += "<li>#{chal_name}</li>\n"
+  html += "<li>#{my_name}</li>\n"
+  html += "</ul><p>\n"
+
+  in_pre_block = false
+  in_ul_block = false
+  line_array.each_index do |index|
+    line = line_array[index]
+    next_line = line_array[index+1]
+    
+    # a few short lines in a row that aren't a title/HR form a preformatted block
+    if(!in_pre_block and line.length.between?(2, 60) and next_line.length.between?(2, 60) and !line.include?("#") and !/^\s{3}/.match(line)) then
+      in_pre_block = true
+      # there's often a blank line before a preformatted block, strip the
+      # extra paragraph that was already added to restore reasonable spacing
+      if(html[-3..-1] == "<p>") then
+        html = html[0..-4]
+      else
+        html += "</p>\n"
+      end
+      html += "<pre>#{line}"
+      next
+    end
+    if(in_pre_block and (line.length >= 60 or line.include?("#"))) then
+      in_pre_block = false
+      html += "</pre>\n<p>"
+    end
+    if(in_pre_block and line.length < 60) then
+      html += line
+      next
+    end
+
+    if(!in_ul_block and /^\s*-\s*(.+)/.match(line)) then
+      in_ul_block = true
+      html += "</p>\n<ul>\n"
+      puts "starting UL block on: #{line}"
+    elsif(in_ul_block and !/^\s*-\s*(.+)/.match(line) and !/^\s{3}\s*(\S.*)/.match(line)) then
+      in_ul_block = false
+      html += "</ul>\n<p>"
+      puts "ending UL block on: #{line}"
+    end
+    
+    if(/^####/.match(line)) then
+      # horizontal rule
+      html += "</p>\n<hr />\n"
+    elsif(matches = /^###\s+([^#]+)\s+\#\#\#/.match(line)) then
+      # title, add the title text as an H1
+      html += "<h1>#{matches[1]}</h1>\n<p>"
+    elsif(/^\s*$/.match(line)) then
+      # blank line, start a new paragraph
+      html += "</p>\n<p>"
+    elsif(in_ul_block and matches = /^\s*-\s*(.+)/.match(line)) then
+      # in a UL block, add a new list item
+      html += "<li>#{matches[1]}</li>\n"
+    elsif(in_ul_block and matches = /^\s{3}\s*(\S.*)/.match(line)) then
+      # hanging indent in a UL block, add it to the last list item
+      # strip the </li>, then add the new content with a new </li>
+      html = html[0..-7]
+      html += " #{matches[1]}</li>"
+    else
+      html += line
+    end
+  end
+  
+  html += "</p>#{VALIDATOR_HTML}"
+
+  html
+end
+
+def format_menu(page)
+  html = "<ul>"
+  page.each_line do |line|
+    line.gsub!("&", "&amp;")
+
+    # . on a line by itself indicates end of page
+    break if /^\.\s*$/.match(line)
+
+    (display_string, item_selector, host, port) = line.split("\t")
+    item_type = display_string[0]
+    display_string = display_string[1..-1]
+      
+    # lines with no tabs are comment lines and should be rendered as-is
+    if(!line.include?("\t")) then
+      html += "<li class='menu'>#{line}</li>\n"
+      next
+    end
+
+    css_classes = {
+      '0' => "far fa-file-alt",     # text file
+      '1' => "far fa-folder",       # submenu
+      '5' => "far fa-file-archive", # "dos file" (archive, it seems like)
+      '9' => "far fa-file",         # binary file
+      'd' => "far fa-file-pdf",     # document (usually PDF)
+      's' => "far fa-file-audio",   # sound file
+      ';' => "far fa-file-video",   # video file
+      'h' => "fas fa-globe-americas", # URL link
+      'I' => "far fa-file-image"
+    }
+
+    # doesn't yet support gopher ports != 70
+    link_to = "/#{host}#{item_selector}"
+    css_class = css_classes.include?(item_type) ? css_classes[item_type] : "far fa-question-circle"
+    case item_type
+      when "i"
+        display_string = "&nbsp;" if display_string == ""
+        html += "<li class='menu'>#{display_string}</li>\n"
+        next
+      when "h"
+        # URL link
+        url = item_selector.gsub(/\/?URL:/i, '')
+        link_to = url
+    end
+    html += "<li class='menu'><i class='#{css_class}'></i> <a href='#{link_to}'>#{display_string}</a></li>\n"
+  end
+  html += "</ul>\n"
+  html += VALIDATOR_HTML
+
+  html
+end
+
+get '/favicon.ico' do
+  halt 404
+end
+
+get '/*' do
+  full_path = params['splat'][0]
+  full_path = DEFAULT_SITE if full_path == ""
+  hostname = full_path.split("/")[0]
+  selector = full_path[hostname.length..-1]
+  query_array = []
+  params.each do |key, val|
+    next if key == "splat"
+    query_array.push (val ? "#{key}=#{val}" : key)
+  end
+  selector += "?#{query_array.join('&')}" if query_array.length > 0
+
+  halt 403 unless DOMAIN_WHITELIST.include?(hostname)
+  
+  site = Gopher.new host: hostname
+  page = site.request(selector: selector)
+  
+  # pass binary files through as-is
+  extension = selector[-3..-1]
+  # there must be a better way than this...
+  if(page[0..10].include?("JFIF") or page[0..10].include?("Exif")) then
+    content_type "image/jpeg"
+    return page
+  end
+
+  if(%w(png gif jpg svg).include?(extension))
+    case extension
+      when "svg"
+        content_type "image/svg+xml"
+      else
+        content_type "image/#{extension}"
+    end
+    return page
+  end
+
+  
+  erb :app do
+    html = ""
+    # CTF writeups get special formatting
+    # (since that's a lot of what my gopher site hosts)
+    if(/ctf-writeups/.match(selector) and selector[-3..-1] == "txt") then
+      html = format_writeup(page) if /ctf-writeups/.match(selector) and selector[-3..-1] == "txt"
+    elsif(selector.include?(".txt"))
+      html = "<pre>#{page}</pre>#{VALIDATOR_HTML}"
+    else
+      html = format_menu(page)
+    end
+    
+    html
+ end
+end

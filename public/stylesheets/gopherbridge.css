@@ -1,0 +1,11 @@
+li.menu {
+  list-style: none;
+  font-family: monospace;
+}
+
+ul.writeup_title {
+  list-style: none;
+  font-weight: bold;
+  margin-left: 0;
+  padding-left: 0;
+}
