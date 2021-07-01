@@ -94,7 +94,9 @@ def format_writeup(page)
     next_line = line_array[index+1]
     
     # a few short lines in a row that aren't a title/HR form a preformatted block
-    if(next_line and !in_pre_block and line.length.between?(2, 60) and next_line.length.between?(2, 60) and !line.include?("#") and !/^\s{2}/.match(line)) then
+    # also a line with 8 hex characters then a space starts one
+    # (address of disassembly)
+    if(!in_pre_block and ((next_line and line.length.between?(2, 60) and next_line.length.between?(2, 60) and !line.include?("#") and !/^\s{2}/.match(line)) or (/^[0-9a-fA-F]{8}\s+/.match(line)))) then
       in_pre_block = true
       # there's often a blank line before a preformatted block, strip the
       # extra paragraph that was already added to restore reasonable spacing
@@ -154,6 +156,8 @@ def format_writeup(page)
 
   # turn anything that looks like a link into a link
   html.gsub!(/(https?:\/\/[^\s)]+)/, "<a href='\\1'>\\1</a>")
+  # take out any trailing periods from links
+  html.gsub!(/\.'>/, "'>'")
 
   html
 end
