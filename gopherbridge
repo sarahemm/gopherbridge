@@ -25,18 +25,67 @@ class Gopher
   end
 end
 
-def format_writeup(page)
-  line_array = page.split("\n")
-
-  ctf_name = line_array.shift
-  chal_name = line_array.shift
-  my_name = line_array.shift
+def format_header(header_lines)
+  cat_name = header_lines.shift
+  doc_name = header_lines.shift
+  my_name = header_lines.shift
   html  = "<p>(this gopher page has been auto-formatted to look more web-like, if you prefer you can <a href='?noformat'>view the original here</a>)</p>\n"
   html += "<ul class='writeup_title'>"
-  html += "<li>#{ctf_name}</li>\n"
-  html += "<li>#{chal_name}</li>\n"
+  html += "<li>#{cat_name}</li>\n"
+  html += "<li>#{doc_name}</li>\n"
   html += "<li>#{my_name}</li>\n"
-  html += "</ul><p>\n"
+  html += "</ul>\n"
+
+  html
+end
+
+def format_note(page)
+  line_array = page.split("\n")
+  html = format_header(line_array.shift(3))
+  html += "<p>"
+
+  in_ol_block = false
+  in_ul_block = false
+
+  line_array.each_index do |index|
+    line = line_array[index].chomp
+    if(in_ol_block and !/^\d+\./.match(line)) then
+      in_ol_block = false
+      html += "</ol><p>"
+    end
+    if(in_ul_block and !/^-\s+/.match(line)) then
+      in_ul_block = false
+      html += "</ul><p>"
+    end
+    if(line[0] == '-' and line[-1] == '-') then
+      html += "</p><h1>#{line[2..-3]}</h1><p>"
+    elsif(text = /^\d\.\s*(.*)/.match(line)) then
+      if(!in_ol_block) then
+        in_ol_block = true
+        html += "</p><ol>"
+      end
+      html += "<li>#{text[1]}</li>"
+    elsif(text = /^-\s+(.*)/.match(line)) then
+      if(!in_ul_block) then
+        in_ul_block = true
+        html += "</p><ul>"
+      end
+      html += "<li>#{text[1]}</li>"
+    else
+      html += line
+    end
+  end  
+  
+  html += "</ul>" if in_ul_block
+  html += "</ol>" if in_ol_block
+  
+  html
+end
+
+def format_writeup(page)
+  line_array = page.split("\n")
+  html = format_header(line_array.shift(3))
+  html += "<p>"
 
   in_pre_block = false
   in_ul_block = false
@@ -45,7 +94,7 @@ def format_writeup(page)
     next_line = line_array[index+1]
     
     # a few short lines in a row that aren't a title/HR form a preformatted block
-    if(!in_pre_block and line.length.between?(2, 60) and next_line.length.between?(2, 60) and !line.include?("#") and !/^\s{2}/.match(line)) then
+    if(next_line and !in_pre_block and line.length.between?(2, 60) and next_line.length.between?(2, 60) and !line.include?("#") and !/^\s{2}/.match(line)) then
       in_pre_block = true
       # there's often a blank line before a preformatted block, strip the
       # extra paragraph that was already added to restore reasonable spacing
@@ -185,7 +234,8 @@ get '/*' do
   page = site.request(selector: selector)
   
   # pass binary files through as-is
-  extension = selector[-3..-1]
+  (selector_base, query_string) = selector.split('?')
+  extension = selector_base[-3..-1]
   # there must be a better way than this...
   if(page[0..10].include?("JFIF") or page[0..10].include?("Exif")) then
     content_type "image/jpeg"
@@ -207,8 +257,10 @@ get '/*' do
     html = ""
     # CTF writeups get special formatting
     # (since that's a lot of what my gopher site hosts)
-    if(/ctf-writeups/.match(selector) and selector[-3..-1] == "txt") then
-      html = format_writeup(page) if /ctf-writeups/.match(selector) and selector[-3..-1] == "txt"
+    if(/ctf-writeups/.match(selector) and extension == "txt" and !selector.include?('noformat')) then
+      html = format_writeup(page)
+    elsif(/misc-notes/.match(selector) and extension == "txt" and !selector.include?('noformat')) then
+      html = format_note(page)
     elsif(selector.include?(".txt"))
       html = "<pre>#{page}</pre>"
     else

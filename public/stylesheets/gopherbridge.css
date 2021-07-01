@@ -1,3 +1,7 @@
+body {
+  margin: 0.5cm;
+}
+
 li.menu {
   list-style: none;
   font-family: monospace;
