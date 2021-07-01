@@ -157,7 +157,7 @@ def format_writeup(page)
   # turn anything that looks like a link into a link
   html.gsub!(/(https?:\/\/[^\s)]+)/, "<a href='\\1'>\\1</a>")
   # take out any trailing periods from links
-  html.gsub!(/\.'>/, "'>'")
+  html.gsub!(/\.'>/, "'>")
 
   html
 end
